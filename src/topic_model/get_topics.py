@@ -1,11 +1,14 @@
 import re
 import spacy
 
+import pandas as pd
 from loguru import logger
-from typing import List
-from textacy import preprocessing
+from typing import List, Tuple
 from nltk.corpus import stopwords
 import nltk
+from bertopic import BERTopic
+import ctypes
+
 
 class GetTopics:
     """
@@ -18,23 +21,23 @@ class GetTopics:
         self.transcript_list = transcript_list
         
         self.nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
-
+                
         self.raw = {}
         self.ts = {}
+        self.topics = {}
+        self.topic_info = {}
         
-        try:
-            stop_words = set(stopwords.words("english"))
-        except LookupError:
-            nltk.download("stopwords")
-            stop_words = set(stopwords.words("english"))
-        
-        stop_words = set(stopwords.words("english"))
-        self.filler_words = stop_words.union({"um", "uh", "like", "sort of", "kinda"})
+        self.model = None
+        self.filler_words = None
 
-    def init_nltk(self) -> None:
+    def init_tools(self) -> None:
         """
         Function to initialise nltk
         """
+        logger.info('Initialising tools')
+        
+        self.model = BERTopic()
+
         try:
             stop_words = set(stopwords.words("english"))
         except LookupError:
@@ -124,16 +127,40 @@ class GetTopics:
                     continue
 
                 self.ts[i].append(f"{speaker if speaker else 'obfuscated'}: {cleaned_line}")
+    
+    def extract_topics(
+        self, 
+        cleaned_ts: List[str]
+    ) -> Tuple[List[int], pd.DataFrame]:
+        """
+        Applies BERTopic to extract topics from a list of cleaned transcripts.
+        :param cleaned_transcripts: list of processed session transcripts
+        :return: a list of topic labels assigned to each document and a summary of topics with top words.
+        """
+        topics, _ = self.model.fit_transform(cleaned_ts)
+
+        topic_info = self.model.get_topic_info()
+
+        return topics, topic_info
+
+    def visualise_topics(self) -> None: return self.model.visualize_topics()
+
 
     def runner(self) -> None:
         """
         Main runner function
         """
-        self.init_nltk()
+        self.init_tools()
         
         self.load_transcripts()
         self.clean_transcripts()
         
+        for i, transcript in self.ts.items():
+            logger.info(f'Extracting topics for transcript {i}')
+            self.topics[i], self.topic_info[i] = self.extract_topics(cleaned_ts=transcript)  # TODO: changed to LDA method (not enough data for BERTopic)
+            
+            self.visualise_topics()
+                        
         x = 0
     
 
