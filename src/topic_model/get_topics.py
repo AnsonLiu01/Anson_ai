@@ -7,7 +7,6 @@ from typing import List, Tuple
 from nltk.corpus import stopwords
 import nltk
 from bertopic import BERTopic
-import ctypes
 
 
 class GetTopics:
