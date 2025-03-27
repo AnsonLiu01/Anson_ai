@@ -1,18 +1,17 @@
 import os
 import re
-import spacy
 import yaml
-
-import pandas as pd
-from loguru import logger
 from typing import List, Tuple, Dict, Any
-from nltk.corpus import stopwords
-import nltk
-from bertopic import BERTopic
+
 import hdbscan
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import PCA
 import numpy as np
+import pandas as pd
+import spacy
+from bertopic import BERTopic
+from loguru import logger
+from sklearn.decomposition import PCA
+from sklearn.feature_extraction.text import CountVectorizer
+from nltk.corpus import stopwords
 
 from label_topics import TopicLabeller
 
