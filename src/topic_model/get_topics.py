@@ -1,12 +1,20 @@
+import os
 import re
 import spacy
+import yaml
 
 import pandas as pd
 from loguru import logger
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 from nltk.corpus import stopwords
 import nltk
 from bertopic import BERTopic
+import hdbscan
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import PCA
+import numpy as np
+
+from label_topics import TopicLabeller
 
 
 class GetTopics:
@@ -20,7 +28,7 @@ class GetTopics:
         self.transcript_list = transcript_list
         
         self.nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
-                
+        
         self.raw = {}
         self.ts = {}
         self.topics = {}
@@ -28,14 +36,40 @@ class GetTopics:
         
         self.model = None
         self.filler_words = None
+    
+    @staticmethod
+    def load_yaml(
+        config_path: str
+    ) -> Dict[Any, Any]:
+        """
+        Function to load yaml file
+        """
+        logger.info('Loading yaml file')
+        with open(config_path, "r") as file:
+            return yaml.safe_load(file)
 
     def init_tools(self) -> None:
         """
-        Function to initialise nltk
+        Function to initialise tools
         """
         logger.info('Initialising tools')
+
+        config_path = os.path.join(os.path.dirname(__file__), 'config', 'seed_words.yaml')
+        seed_words_config = self.load_yaml(config_path=config_path)
         
-        self.model = BERTopic()
+        self.labeller = TopicLabeller(seed_topics=seed_words_config)
+        
+        self.hdbscan_model = hdbscan.HDBSCAN(
+            min_cluster_size=5,
+            metric="euclidean",
+            cluster_selection_method="eom",
+            prediction_data=True
+        )
+
+        self.model = BERTopic(
+            hdbscan_model=self.hdbscan_model,
+            nr_topics=5
+        )
 
         try:
             stop_words = set(stopwords.words("english"))
@@ -43,9 +77,7 @@ class GetTopics:
             logger.info('nltk stop words not found, downloading')
             nltk.download("stopwords")
             stop_words = set(stopwords.words("english"))
-        
-        self.filler_words = stop_words.union({"um", "uh", "like", "sort of", "kinda"})
-        
+                
     def load_transcripts(self) -> None:
         """
         Function to load transcripts
@@ -57,47 +89,6 @@ class GetTopics:
             
         logger.info(f'total transcript count: {len(self.raw.keys())}')
 
-
-    def clean_transcripts(self) -> None:
-        """
-        Function to clean transcripts
-        """
-        logger.info('Cleaning transcripts')
-        
-        for i, ts in self.raw.items():
-            self.ts[i] = []
-    
-            for line in ts:
-                speaker = None
-                if line.startswith("Therapist:"):
-                    speaker = "Therapist"
-                elif line.startswith("Client:"):
-                    speaker = "Client"
-                
-                line = re.sub(r"^(Therapist|Client):", "", line).strip()
-                line = re.sub(r"\b(u+h+|u+m+|uh|um)\b", "", line, flags=re.IGNORECASE)
-                
-                if line == '':
-                    continue
-                
-                doc = self.nlp(line.lower())
-                cleaned_tokens = [token.lemma_ for token in doc if not token.is_stop and token.is_alpha]
-
-                cleaned_line = " ".join(cleaned_tokens)
-
-                self.ts[i].append(f"{speaker if speaker else 'obfuscated'}: {cleaned_line}")
-
-    def filter_filler_words(
-        self, 
-        text: str
-    ) -> str:
-        """
-        Function to filter out filler words from text
-        :param text: text to filter out filler words from
-        """
-        doc = self.nlp(text)
-        return " ".join([token.text for token in doc if token.text.lower() not in self.filler_words and not token.is_stop])
-
     def clean_transcripts(self) -> None:
         """
         Function to clean transcripts
@@ -107,25 +98,12 @@ class GetTopics:
         for i, ts in self.raw.items():
             self.ts[i] = []
 
-            for line in ts:
-                speaker = None
-                if line.startswith("Therapist:"):
-                    speaker = "Therapist"
-                elif line.startswith("Client:"):
-                    speaker = "Client"
+            for line in ts:    
+                line = re.sub(r"^(Therapist|Client):", "", line).strip()              
+                doc = str(self.nlp(line.lower()))
                 
-                line = re.sub(r"^(Therapist|Client):", "", line).strip()
-                line = self.filter_filler_words(line)
-                                
-                doc = self.nlp(line.lower())
-                cleaned_tokens = [token.lemma_ for token in doc if not token.is_stop and token.is_alpha]
-
-                cleaned_line = " ".join(cleaned_tokens)
-                
-                if cleaned_line == '':
-                    continue
-
-                self.ts[i].append(f"{speaker if speaker else 'obfuscated'}: {cleaned_line}")
+                if doc != '':
+                    self.ts[i].append(doc)
     
     def extract_topics(
         self, 
@@ -137,13 +115,9 @@ class GetTopics:
         :return: a list of topic labels assigned to each document and a summary of topics with top words.
         """
         topics, _ = self.model.fit_transform(cleaned_ts)
-
         topic_info = self.model.get_topic_info()
 
         return topics, topic_info
-
-    def visualise_topics(self) -> None: return self.model.visualize_topics()
-
 
     def runner(self) -> None:
         """
@@ -156,12 +130,13 @@ class GetTopics:
         
         for i, transcript in self.ts.items():
             logger.info(f'Extracting topics for transcript {i}')
-            self.topics[i], self.topic_info[i] = self.extract_topics(cleaned_ts=transcript)  # TODO: changed to LDA method (not enough data for BERTopic)
+            self.topics[i], self.topic_info[i] = self.extract_topics(cleaned_ts=transcript)
             
-            self.visualise_topics()
-                        
-        x = 0
-    
+            topic_words = self.topic_info[i].set_index("Topic").to_dict()['Representative_Docs']
+            labelled_topics = self.labeller.label_topics(topic_words)  # TODO: topics are all identical, fix to ensure all topics are different but still accurate
+
+            self.model.visualize_barchart().show()
+
 
 if __name__ == "__main__":
     a = GetTopics(transcript_list=['/Users/ansonliu/Documents/Github/Anson_ai/data/transcripts/synthetic_test/depression_synthetic.txt'])
