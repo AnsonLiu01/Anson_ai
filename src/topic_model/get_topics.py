@@ -1,7 +1,9 @@
+import sys
 import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 import re
-import yaml
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 
 import hdbscan
 import numpy as np
@@ -9,11 +11,11 @@ import pandas as pd
 import spacy
 from bertopic import BERTopic
 from loguru import logger
-from sklearn.decomposition import PCA
-from sklearn.feature_extraction.text import CountVectorizer
+import nltk
 from nltk.corpus import stopwords
 
 from label_topics import TopicLabeller
+from src.utils import load_yaml
 
 
 class GetTopics:
@@ -36,17 +38,6 @@ class GetTopics:
         self.model = None
         self.filler_words = None
     
-    @staticmethod
-    def load_yaml(
-        config_path: str
-    ) -> Dict[Any, Any]:
-        """
-        Function to load yaml file
-        """
-        logger.info('Loading yaml file')
-        with open(config_path, "r") as file:
-            return yaml.safe_load(file)
-
     def init_tools(self) -> None:
         """
         Function to initialise tools
@@ -54,7 +45,7 @@ class GetTopics:
         logger.info('Initialising tools')
 
         config_path = os.path.join(os.path.dirname(__file__), 'config', 'seed_words.yaml')
-        seed_words_config = self.load_yaml(config_path=config_path)
+        seed_words_config = load_yaml(config_path=config_path)
         
         self.labeller = TopicLabeller(seed_topics=seed_words_config)
         
@@ -97,7 +88,7 @@ class GetTopics:
         for i, ts in self.raw.items():
             self.ts[i] = []
 
-            for line in ts:    
+            for line in ts:
                 line = re.sub(r"^(Therapist|Client):", "", line).strip()              
                 doc = str(self.nlp(line.lower()))
                 
@@ -132,7 +123,7 @@ class GetTopics:
             self.topics[i], self.topic_info[i] = self.extract_topics(cleaned_ts=transcript)
             
             topic_words = self.topic_info[i].set_index("Topic").to_dict()['Representative_Docs']
-            labelled_topics = self.labeller.label_topics(topic_words)  # TODO: topics are all identical, fix to ensure all topics are different but still accurate
+            labelled_topics = self.labeller.label_with_keywords(topic_words)  # TODO: topics are all identical, fix to ensure all topics are different but still accurate
 
             self.model.visualize_barchart().show()
 

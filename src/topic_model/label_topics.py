@@ -1,8 +1,16 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 from typing import Dict, List
 
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 from loguru import logger
+from keybert import KeyBERT
+import torch
+
+from src.utils import load_yaml
 
 
 class TopicLabeller:
@@ -18,34 +26,47 @@ class TopicLabeller:
         """
         self.seed_topics = seed_topics
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        config_path = os.path.join(os.path.dirname(__file__), 'config', 'seed_words.yaml')
+        self.predefined_labels = load_yaml(config_path=config_path)
 
-    def label_topics(
+    def label_with_keywords(
         self, 
-        topic_words: Dict[int, List[str]]
+        topic_words: List[str], 
+        predefined_labels: Dict[int, str], 
+        threshold: float = 0.3
     ) -> Dict[int, str]:
         """
-        Function to label topics based on seed topics
-        :param topic_words: dict containing topics words
+        Labels topics using predefined labels or extracts keywords dynamically.
+
+        :param topic_words: List of representative documents for each topic.
+        :param predefined_labels: Dictionary of predefined topic labels.
+        :param threshold: Similarity threshold for predefined labeling.
+        :return: Dictionary of topic labels.
         """
-        logger.info('Labelling topics')
-        
-        topic_labels = {}
+        kw_model = KeyBERT(model='all-MiniLM-L6-v2')
+        labels = {}
 
-        for topic_id, words in topic_words.items():
-            best_match = None
-            highest_score = -1
+        for topic_id, doc in topic_words.items():
+            # Check predefined labels first
+            similarity_scores = {
+                label: self.model.similarity(doc, label) 
+                for label in predefined_labels.values()
+            }
             
-            # Convert topic words into an embedding
-            topic_embedding = self.model.encode(" ".join(words))
+            # Use predefined label if similarity is high enough
+            best_label = max(similarity_scores, key=similarity_scores.get)
+            if similarity_scores[best_label] >= threshold:
+                labels[topic_id] = best_label
+            else:
+                # Extract keywords dynamically
+                keywords = kw_model.extract_keywords(
+                    doc, 
+                    keyphrase_ngram_range=(1, 2), 
+                    stop_words='english', 
+                    top_n=2
+                )
+                dynamic_label = ", ".join([kw for kw, _ in keywords])
+                labels[topic_id] = dynamic_label or "Uncategorized"
 
-            for label, seed_words in self.seed_topics.items():
-                seed_embedding = self.model.encode(" ".join(seed_words))
-                similarity = cosine_similarity([topic_embedding], [seed_embedding])[0][0]
-                
-                if similarity > highest_score:
-                    highest_score = similarity
-                    best_match = label
-            
-            topic_labels[topic_id] = best_match if best_match else "Uncategorized"
-
-        return topic_labels
+        return labels
