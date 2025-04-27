@@ -13,6 +13,7 @@ from bertopic import BERTopic
 from loguru import logger
 import nltk
 from nltk.corpus import stopwords
+from nltk.tokenize import PunktSentenceTokenizer, word_tokenize
 
 from label_topics import TopicLabeller
 from src.utils import load_yaml
@@ -37,6 +38,7 @@ class GetTopics:
         
         self.model = None
         self.filler_words = None
+        self.tokeniser = None
     
     def init_tools(self) -> None:
         """
@@ -60,14 +62,28 @@ class GetTopics:
             hdbscan_model=self.hdbscan_model,
             nr_topics=5
         )
-
+        
         try:
             stop_words = set(stopwords.words("english"))
         except LookupError:
-            logger.info('nltk stop words not found, downloading')
+            logger.info('nltk stop words not found; downloading')
             nltk.download("stopwords")
             stop_words = set(stopwords.words("english"))
-                
+            
+        try:
+            nltk.data.find('tokenizers/punkt')
+        except LookupError:
+            logger.info('nltk punkt tokeniser not found; downloading')
+            nltk.download('punkt')
+
+        try:
+            nltk.data.find('tokenizers/punkt_tab')
+        except LookupError:
+            logger.info('nltk punkt_tab tokeniser not found; downloading')
+            nltk.download('punkt_tab')
+            
+        self.tokeniser = PunktSentenceTokenizer()
+                    
     def load_transcripts(self) -> None:
         """
         Function to load transcripts
@@ -81,7 +97,7 @@ class GetTopics:
 
     def clean_transcripts(self) -> None:
         """
-        Function to clean transcripts
+        Function to clean transcripts. Removes spqecial characters, lowers text, remove shorter dialogues and stems words (to their base form)
         """
         logger.info('Cleaning transcripts')
         
@@ -92,8 +108,12 @@ class GetTopics:
                 line = re.sub(r"^(Therapist|Client):", "", line).strip()              
                 doc = str(self.nlp(line.lower()))
                 
-                if doc != '':
-                    self.ts[i].append(doc)
+                words = word_tokenize(doc)
+                words_only = [word for word in words if word.isalpha() or word == '.']
+                
+                formatted_doc = " ".join(words_only)
+                    
+                self.ts[i].append(formatted_doc)
     
     def extract_topics(
         self, 
