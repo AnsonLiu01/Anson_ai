@@ -65,7 +65,7 @@ class TopicLabeller:
                 labels[topic_id] = best_label
             else:
                 logger.info(f'topic_id {topic_id}: default topic label not relevant enough, extracting keywords')
-                keywords = kw_model.extract_keywords(
+                keywords = kw_model.extract_keywords(  # TODO: continue from here
                     doc, 
                     keyphrase_ngram_range=(1, 2), 
                     stop_words='english', 

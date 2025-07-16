@@ -152,8 +152,7 @@ class GetTopics:
             labelled_topics = self.labeller.label_with_keywords(
                 topic_words=topic_words,
                 predefined_labels=self.topic_info[i]['Name'].to_dict()
-                )  # TODO: topics are all identical, fix to ensure all topics are different but still accurate
-
+                )
             self.bert.visualize_barchart().show()
 
 
