@@ -36,7 +36,7 @@ class GetTopics:
         self.topics = {}
         self.topic_info = {}
         
-        self.model = None
+        self.bert = None
         self.filler_words = None
         self.tokeniser = None
     
@@ -58,9 +58,9 @@ class GetTopics:
             prediction_data=True
         )
 
-        self.model = BERTopic(
+        self.bert = BERTopic(
             hdbscan_model=self.hdbscan_model,
-            nr_topics=5
+            nr_topics='auto'
         )
         
         try:
@@ -112,8 +112,9 @@ class GetTopics:
                 words_only = [word for word in words if word.isalpha() or word == '.']
                 
                 formatted_doc = " ".join(words_only)
-                    
-                self.ts[i].append(formatted_doc)
+                
+                if formatted_doc:    
+                    self.ts[i].append(formatted_doc)
     
     def extract_topics(
         self, 
@@ -124,8 +125,8 @@ class GetTopics:
         :param cleaned_transcripts: list of processed session transcripts
         :return: a list of topic labels assigned to each document and a summary of topics with top words.
         """
-        topics, _ = self.model.fit_transform(cleaned_ts)
-        topic_info = self.model.get_topic_info()
+        topics, probs = self.bert.fit_transform(cleaned_ts)
+        topic_info = self.bert.get_topic_info()
 
         return topics, topic_info
 
@@ -133,19 +134,27 @@ class GetTopics:
         """
         Main runner function
         """
-        self.init_tools()
+        self.init_tools()   
         
         self.load_transcripts()
         self.clean_transcripts()
         
         for i, transcript in self.ts.items():
-            logger.info(f'Extracting topics for transcript {i}')
+            logger.info(f'Extracting topics for transcript {i + 1}')
             self.topics[i], self.topic_info[i] = self.extract_topics(cleaned_ts=transcript)
             
-            topic_words = self.topic_info[i].set_index("Topic").to_dict()['Representative_Docs']
-            labelled_topics = self.labeller.label_with_keywords(topic_words)  # TODO: topics are all identical, fix to ensure all topics are different but still accurate
+            self.topic_info[i]['formatted_docs'] = [
+                str(doc).strip("[]").replace("'", "")
+                for doc in self.topic_info[i]['Representative_Docs']
+            ]
 
-            self.model.visualize_barchart().show()
+            topic_words = self.topic_info[i].set_index("Topic").to_dict()['Representative_Docs']
+            labelled_topics = self.labeller.label_with_keywords(
+                topic_words=topic_words,
+                predefined_labels=self.topic_info[i]['Name'].to_dict()
+                )  # TODO: topics are all identical, fix to ensure all topics are different but still accurate
+
+            self.bert.visualize_barchart().show()
 
 
 if __name__ == "__main__":
