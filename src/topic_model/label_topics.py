@@ -11,6 +11,7 @@ from keybert import KeyBERT
 from sentence_transformers import util
 from transformers import pipeline
 from textblob import TextBlob
+from gramformer import Gramformer
 
 
 from src.utils import load_yaml
@@ -84,7 +85,7 @@ class TopicLabeller:
                         top_label, top_similarity = kw_chunk[0][0], kw_chunk[0][1]
                         logger.debug(f'NEW top label: {top_label} (similarity score: {top_similarity})')
                 
-                top_label = self.refine_label(label=top_label, doc=doc, method='t5')
+                top_label = self.refine_label(label=top_label, doc=doc, method='textblob')
                 
                 logger.success(f'Using new keyword label for topc id {topic_id}: {top_label}')
 
@@ -111,7 +112,7 @@ class TopicLabeller:
             blob = TextBlob(label)
             refined = blob.correct()
         elif method == 't5':
-            t5_grammar = pipeline("text2text-generation", model="vennify/t5-base-grammar-correction")
+            t5_grammar = pipeline("text2text-generation", model="google/flan-t5-base")
             
             prompt = f"""The string '{label}' is the output of a keyword-focused approach for labels for a topic mapping task focused around therapy.\n 
             Can you correct the grammar or use these keywords to create a coherent and meaningful phrase.\n
@@ -125,7 +126,7 @@ class TopicLabeller:
             refined = t5_grammar(prompt, max_length=20)[0]['generated_text']
         else:
             raise ValueError(f'Method must be one of [textblob, t5], got: {method}')
-        return refined  # TODO: continue without label coherency
+        return refined.strip()  
 
         
         
