@@ -89,7 +89,7 @@ class TopicLabeller:
                 
                 logger.success(f'Using new keyword label for topc id {topic_id}: {top_label}')
 
-                labels[topic_id] = top_label or 'Uncategorised'
+                labels[topic_id] = str(top_label) or 'Uncategorised'
 
         return labels
     
@@ -106,7 +106,7 @@ class TopicLabeller:
         :param method: method of refinement
         :return: grammatically correct  and refined label
         """
-        logger.info(f'Refining label: {label}')
+        logger.info(f'Refining label: {label}, using {method} method')
         
         if method == 'textblob':
             blob = TextBlob(label)
@@ -127,7 +127,3 @@ class TopicLabeller:
         else:
             raise ValueError(f'Method must be one of [textblob, t5], got: {method}')
         return refined.strip()  
-
-        
-        
-        
