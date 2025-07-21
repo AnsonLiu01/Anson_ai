@@ -6,6 +6,8 @@ import re
 from typing import List, Tuple
 
 import hdbscan
+from umap import UMAP
+
 import numpy as np
 import pandas as pd
 import spacy
@@ -14,6 +16,7 @@ from loguru import logger
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import PunktSentenceTokenizer, word_tokenize
+from keybert import KeyBERT
 
 from label_topics import TopicLabeller
 from src.utils import load_yaml
@@ -51,14 +54,22 @@ class GetTopics:
         
         self.labeller = TopicLabeller(seed_topics=seed_words_config)
         
+        self.umap_model = UMAP(
+            n_components=5,
+            n_neighbors=15,
+            min_dist=0.1,
+            random_state=42
+        )
+
         self.hdbscan_model = hdbscan.HDBSCAN(
             min_cluster_size=5,
-            metric="euclidean",
+            metric="euclidean",           # Matches UMAP's output
             cluster_selection_method="eom",
             prediction_data=True
         )
 
         self.bert = BERTopic(
+            umap_model=self.umap_model,   # Add this line
             hdbscan_model=self.hdbscan_model,
             nr_topics='auto'
         )
@@ -108,8 +119,11 @@ class GetTopics:
                 line = re.sub(r"^(Therapist|Client):", "", line).strip()              
                 doc = str(self.nlp(line.lower()))
                 
-                words = word_tokenize(doc)
-                words_only = [word for word in words if word.isalpha() or word == '.']
+                words_only = [
+                    word for word in doc.split(' ') 
+                    if (re.search(r'[a-zA-Z0-9]', word) or word in {'.', '!', '?'})  # Keep basic punctuation if needed
+                    and word.strip()  # Exclude whitespace-only strings
+                ]
                 
                 formatted_doc = " ".join(words_only)
                 
@@ -153,8 +167,10 @@ class GetTopics:
                 topic_words=topic_words,
                 predefined_labels=self.topic_info[i]['Name'].to_dict()
                 )
-            self.bert.visualize_barchart().show()
-
+            
+            self.bert.set_topic_labels(labelled_topics)
+            self.bert.visualize_barchart(custom_labels=labelled_topics).show()
+            
 
 if __name__ == "__main__":
     a = GetTopics(transcript_list=['/Users/ansonliu/Documents/Github/Anson_ai/data/transcripts/synthetic_test/depression_synthetic.txt'])
