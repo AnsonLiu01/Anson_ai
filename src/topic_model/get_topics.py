@@ -8,7 +8,7 @@ from typing import List, Tuple
 import hdbscan
 from umap import UMAP
 
-import numpy as np
+import PyPDF2
 import pandas as pd
 import spacy
 from bertopic import BERTopic
@@ -19,18 +19,21 @@ from nltk.tokenize import PunktSentenceTokenizer, word_tokenize
 from keybert import KeyBERT
 
 from label_topics import TopicLabeller
+from src.topic_model.eda_topics import EDATopics
 from src.utils import load_yaml
 
 
-class GetTopics:
+class GetTopics(EDATopics):
     """
     Class to get topics from each transcript
     """
     def __init__(
         self, 
-        transcript_list: List[str]
+        transcript_list: List[str],
+        run_eda: bool
     ):
         self.transcript_list = transcript_list
+        self.run_eda = run_eda
         
         self.nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
         
@@ -63,15 +66,16 @@ class GetTopics:
 
         self.hdbscan_model = hdbscan.HDBSCAN(
             min_cluster_size=5,
-            metric="euclidean",           # Matches UMAP's output
+            metric="euclidean",
             cluster_selection_method="eom",
             prediction_data=True
         )
 
         self.bert = BERTopic(
-            umap_model=self.umap_model,   # Add this line
+            umap_model=self.umap_model,
             hdbscan_model=self.hdbscan_model,
-            nr_topics='auto'
+            nr_topics='auto',
+            calculate_probabilities=True  # probabilities needed to visualise
         )
         
         try:
@@ -101,8 +105,22 @@ class GetTopics:
         """
         for i, transcript in enumerate(self.transcript_list):
             logger.info(f'Loading transcript: {transcript}')
-            with open(transcript, "r", encoding="utf-8") as file:
-                self.raw[i] = file.readlines()
+            if transcript.endswith('.txt'):
+                with open(transcript, "r", encoding="utf-8") as file:
+                    self.raw[i] = file.readlines()
+            elif transcript.endswith('.pdf'):
+                text_dict = {}
+                with open(transcript, 'rb') as file:
+                    reader = PyPDF2.PdfReader(file)
+                    for page_num in range(
+                        5,  # TEMP current pdf transcript starts from 5
+                        len(reader.pages)
+                        ):
+                        text_dict[page_num] = reader.pages[page_num].extract_text()
+                    text_dict
+                    self.raw[i] = text_dict
+            else:
+                raise NotImplementedError(f'File extension {transcript.split(".")[-1]} not supported for parsing')
             
         logger.info(f'total transcript count: {len(self.raw.keys())}')
 
@@ -141,6 +159,8 @@ class GetTopics:
         """
         topics, probs = self.bert.fit_transform(cleaned_ts)
         topic_info = self.bert.get_topic_info()
+        
+        self.get_topic_freq()
 
         return topics, topic_info
 
@@ -169,10 +189,16 @@ class GetTopics:
                 )
             
             self.bert.set_topic_labels(labelled_topics)
-            self.bert.visualize_barchart(custom_labels=labelled_topics).show()
+            self.bert.visualize_barchart(custom_labels=labelled_topics).show()  # TODO: get visualisation to work
             
 
 if __name__ == "__main__":
-    a = GetTopics(transcript_list=['/Users/ansonliu/Documents/Github/Anson_ai/data/transcripts/synthetic_test/depression_synthetic.txt'])
+    a = GetTopics(
+        transcript_list=[
+            '/Users/ansonliu/Documents/Github/Anson_ai/data/transcripts/synthetic_test/depression_synthetic.txt',
+            '/Users/ansonliu/Documents/Github/Other/carl_rogers_therapy_sessions.pdf'
+            ],
+        run_eda=True
+    )
     
     a.runner()
