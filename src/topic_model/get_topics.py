@@ -107,18 +107,18 @@ class GetTopics(EDATopics):
             logger.info(f'Loading transcript: {transcript}')
             if transcript.endswith('.txt'):
                 with open(transcript, "r", encoding="utf-8") as file:
-                    self.raw[i] = file.readlines()
+                    self.raw[i] = ''.join(file.readlines())
             elif transcript.endswith('.pdf'):
                 text_dict = {}
                 with open(transcript, 'rb') as file:
                     reader = PyPDF2.PdfReader(file)
                     for page_num in range(
-                        5,  # TEMP current pdf transcript starts from 5
+                        4,  # TEMP current pdf transcript starts from 5
                         len(reader.pages)
                         ):
                         text_dict[page_num] = reader.pages[page_num].extract_text()
-                    text_dict
-                    self.raw[i] = text_dict
+                    
+                    self.raw[i] = ''.join(text_dict.values())
             else:
                 raise NotImplementedError(f'File extension {transcript.split(".")[-1]} not supported for parsing')
             
@@ -131,22 +131,23 @@ class GetTopics(EDATopics):
         logger.info('Cleaning transcripts')
         
         for i, ts in self.raw.items():
-            self.ts[i] = []
-
-            for line in ts:
-                line = re.sub(r"^(Therapist|Client):", "", line).strip()              
-                doc = str(self.nlp(line.lower()))
-                
-                words_only = [
-                    word for word in doc.split(' ') 
-                    if (re.search(r'[a-zA-Z0-9]', word) or word in {'.', '!', '?'})  # Keep basic punctuation if needed
-                    and word.strip()  # Exclude whitespace-only strings
-                ]
-                
-                formatted_doc = " ".join(words_only)
-                
-                if formatted_doc:    
-                    self.ts[i].append(formatted_doc)
+            ts = re.sub(r'\b\w+:\s*', '', ts)
+            ts = ts.replace(r'\\+', '')
+            ts = ts.replace('\n', ' ') 
+            ts = re.sub(r'\s+', ' ', ts).strip()
+            
+            doc = str(self.nlp(ts.lower()))
+            
+            words_only = [
+                word for word in doc.split(' ') 
+                if (re.search(r'[a-zA-Z0-9]', word) or word in {'.', '!', '?'})
+                and word.strip()
+            ]
+            
+            formatted_doc = " ".join(words_only)
+            
+            if formatted_doc:    
+                self.ts[i] = formatted_doc
     
     def extract_topics(
         self, 
@@ -195,7 +196,7 @@ class GetTopics(EDATopics):
 if __name__ == "__main__":
     a = GetTopics(
         transcript_list=[
-            '/Users/ansonliu/Documents/Github/Anson_ai/data/transcripts/synthetic_test/depression_synthetic.txt',
+            # '/Users/ansonliu/Documents/Github/Anson_ai/data/transcripts/synthetic_test/depression_synthetic.txt',
             '/Users/ansonliu/Documents/Github/Other/carl_rogers_therapy_sessions.pdf'
             ],
         run_eda=True
