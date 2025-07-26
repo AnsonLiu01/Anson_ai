@@ -40,7 +40,7 @@ class TopicLabeller:
         self, 
         topic_words: Dict[int, List[str]], 
         predefined_labels: Dict[int, str], 
-        threshold: float = 0.6
+        threshold: float = 0.7
     ) -> Dict[int, str]:
         """
         Labels topics using predefined labels or extracts keywords dynamically.
@@ -65,7 +65,7 @@ class TopicLabeller:
             
             default_label = max(similarity_scores, key=similarity_scores.get)
             if similarity_scores[default_label] >= threshold:
-                logger.success(f'topic_id {topic_id}: default topic label sufficient')
+                logger.success(f'topic_id {topic_id}: default topic label sufficient ({default_label})')
                 labels[topic_id] = default_label
             else:
                 logger.info(f'topic_id {topic_id}: default topic label not relevant enough, extracting keywords')
