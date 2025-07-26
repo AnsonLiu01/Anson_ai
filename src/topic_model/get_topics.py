@@ -18,7 +18,7 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import PunktSentenceTokenizer, sent_tokenize
 
-from label_topics import TopicLabeller
+from topic_model.label_topics import TopicLabeller
 from src.topic_model.eda_topics import EDATopics
 from src.utils import load_yaml
 
@@ -125,7 +125,7 @@ class GetTopics(EDATopics):
         """
         Function to clean transcripts. Removes spqecial characters, lowers text, remove shorter dialogues and stems words (to their base form)
         """
-        logger.info('Cleaning transcripts')
+        logger.info('Cleaning transcript')
         processed = re.sub(r'\b\w+:\s*', '', self.raw_ts)
         processed = processed.replace(r'\\+', '')
         processed = processed.replace('\n', ' ') 
@@ -157,7 +157,7 @@ class GetTopics(EDATopics):
         :param cleaned_transcripts: list of processed session transcripts
         :return: a list of topic labels assigned to each document and a summary of topics with top words.
         """
-        logger.info(f'Extracting topics for transcript')
+        logger.info(f'Extracting topics')
 
         topics, probs = self.bert.fit_transform(documents=cleaned_ts)
         topic_info = self.bert.get_topic_info()
@@ -206,12 +206,4 @@ class GetTopics(EDATopics):
         self.label_topics()
         
         self.visualisations()
-            
-            
-if __name__ == "__main__":
-    a = GetTopics(
-        transcript_loc='/Users/ansonliu/Documents/Github/Other/carl_rogers_therapy_sessions.pdf',
-        run_eda=True
-    )
-    
-    a.runner()
+        
