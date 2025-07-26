@@ -12,11 +12,11 @@ import PyPDF2
 import pandas as pd
 import spacy
 from bertopic import BERTopic
+
 from loguru import logger
 import nltk
 from nltk.corpus import stopwords
-from nltk.tokenize import PunktSentenceTokenizer, word_tokenize
-from keybert import KeyBERT
+from nltk.tokenize import PunktSentenceTokenizer, sent_tokenize
 
 from label_topics import TopicLabeller
 from src.topic_model.eda_topics import EDATopics
@@ -29,16 +29,16 @@ class GetTopics(EDATopics):
     """
     def __init__(
         self, 
-        transcript_list: List[str],
+        transcript_loc: str,
         run_eda: bool
     ):
-        self.transcript_list = transcript_list
+        self.transcript_loc = transcript_loc
         self.run_eda = run_eda
         
         self.nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
         
-        self.raw = {}
-        self.ts = {}
+        self.raw_ts = None
+        self.formatted_ts = None
         self.topics = {}
         self.topic_info = {}
         
@@ -103,51 +103,50 @@ class GetTopics(EDATopics):
         """
         Function to load transcripts
         """
-        for i, transcript in enumerate(self.transcript_list):
-            logger.info(f'Loading transcript: {transcript}')
-            if transcript.endswith('.txt'):
-                with open(transcript, "r", encoding="utf-8") as file:
-                    self.raw[i] = ''.join(file.readlines())
-            elif transcript.endswith('.pdf'):
-                text_dict = {}
-                with open(transcript, 'rb') as file:
-                    reader = PyPDF2.PdfReader(file)
-                    for page_num in range(
-                        4,  # TEMP current pdf transcript starts from 5
-                        len(reader.pages)
-                        ):
-                        text_dict[page_num] = reader.pages[page_num].extract_text()
-                    
-                    self.raw[i] = ''.join(text_dict.values())
-            else:
-                raise NotImplementedError(f'File extension {transcript.split(".")[-1]} not supported for parsing')
-            
-        logger.info(f'total transcript count: {len(self.raw.keys())}')
-
+        logger.info(f'Loading transcript: {self.transcript_loc}')
+        if self.transcript_loc.endswith('.txt'):
+            with open(self.transcript_loc, "r", encoding="utf-8") as file:
+                self.raw_ts = ''.join(file.readlines())
+        elif self.transcript_loc.endswith('.pdf'):
+            text_dict = {}
+            with open(self.transcript_loc, 'rb') as file:
+                reader = PyPDF2.PdfReader(file)
+                for page_num in range(
+                    4,  # TEMP current pdf transcript starts from 5
+                    len(reader.pages)
+                    ):
+                    text_dict[page_num] = reader.pages[page_num].extract_text()
+                
+                self.raw_ts = ''.join(text_dict.values())
+        else:
+            raise NotImplementedError(f'File extension {self.transcript_loc.split(".")[-1]} not supported for parsing')
+        
     def clean_transcripts(self) -> None:
         """
         Function to clean transcripts. Removes spqecial characters, lowers text, remove shorter dialogues and stems words (to their base form)
         """
         logger.info('Cleaning transcripts')
+        processed = re.sub(r'\b\w+:\s*', '', self.raw_ts)
+        processed = processed.replace(r'\\+', '')
+        processed = processed.replace('\n', ' ') 
+        processed = re.sub(r'\s+', ' ', processed).strip()
         
-        for i, ts in self.raw.items():
-            ts = re.sub(r'\b\w+:\s*', '', ts)
-            ts = ts.replace(r'\\+', '')
-            ts = ts.replace('\n', ' ') 
-            ts = re.sub(r'\s+', ' ', ts).strip()
-            
-            doc = str(self.nlp(ts.lower()))
-            
-            words_only = [
-                word for word in doc.split(' ') 
-                if (re.search(r'[a-zA-Z0-9]', word) or word in {'.', '!', '?'})
-                and word.strip()
-            ]
-            
-            formatted_doc = " ".join(words_only)
-            
-            if formatted_doc:    
-                self.ts[i] = formatted_doc
+        doc = str(self.nlp(processed.lower()))
+        
+        words_only = [
+            word for word in doc.split(' ') 
+            if (re.search(r'[a-zA-Z0-9]', word) or word in {'.', '!', '?'})
+            and word.strip()
+        ]
+        
+        formatted_doc = " ".join(words_only)
+        
+        if formatted_doc:
+            formatted_doc = [formatted_doc]
+            documents = sent_tokenize(formatted_doc[0])
+            self.formatted_ts = [doc for doc in documents if len(doc.split()) > 3]
+        else:
+            raise ValueError(f'No formatted words found or recognised in transcript')
     
     def extract_topics(
         self, 
@@ -158,13 +157,40 @@ class GetTopics(EDATopics):
         :param cleaned_transcripts: list of processed session transcripts
         :return: a list of topic labels assigned to each document and a summary of topics with top words.
         """
-        topics, probs = self.bert.fit_transform(cleaned_ts)
+        logger.info(f'Extracting topics for transcript')
+
+        topics, probs = self.bert.fit_transform(documents=cleaned_ts)
         topic_info = self.bert.get_topic_info()
         
         self.get_topic_freq()
 
-        return topics, topic_info
+        self.topics, self.topic_info = topics, topic_info
+    
+    def label_topics(self) -> None:
+        """
+        Function to label topics
+        """
+        self.topic_info['formatted_docs'] = [
+            str(doc).strip("[]").replace("'", "")
+            for doc in self.topic_info['Representative_Docs']
+            ]
 
+        topic_words = self.topic_info.set_index("Topic").to_dict()['Representative_Docs']
+        self.labelled_topics = self.labeller.label_with_keywords(
+            topic_words=topic_words,
+            predefined_labels=self.topic_info['Name'].to_dict()
+            )
+            
+        self.bert.set_topic_labels(self.labelled_topics)
+
+    def visualisations(self) -> None:
+        """
+        Function to process all visualisations
+        """
+        self.bert.visualize_topics(custom_labels=self.labelled_topics).show()
+        self.bert.visualize_barchart(custom_labels=self.labelled_topics).show()
+        self.bert.visualize_heatmap(custom_labels=self.labelled_topics).show()
+        
     def runner(self) -> None:
         """
         Main runner function
@@ -174,31 +200,15 @@ class GetTopics(EDATopics):
         self.load_transcripts()
         self.clean_transcripts()
         
-        for i, transcript in self.ts.items():
-            logger.info(f'Extracting topics for transcript {i + 1}')
-            self.topics[i], self.topic_info[i] = self.extract_topics(cleaned_ts=transcript)
+        self.extract_topics(cleaned_ts=self.formatted_ts)
+        self.label_topics()
+        
+        self.visualisations()
             
-            self.topic_info[i]['formatted_docs'] = [
-                str(doc).strip("[]").replace("'", "")
-                for doc in self.topic_info[i]['Representative_Docs']
-            ]
-
-            topic_words = self.topic_info[i].set_index("Topic").to_dict()['Representative_Docs']
-            labelled_topics = self.labeller.label_with_keywords(
-                topic_words=topic_words,
-                predefined_labels=self.topic_info[i]['Name'].to_dict()
-                )
             
-            self.bert.set_topic_labels(labelled_topics)
-            self.bert.visualize_barchart(custom_labels=labelled_topics).show()  # TODO: get visualisation to work
-            
-
 if __name__ == "__main__":
     a = GetTopics(
-        transcript_list=[
-            # '/Users/ansonliu/Documents/Github/Anson_ai/data/transcripts/synthetic_test/depression_synthetic.txt',
-            '/Users/ansonliu/Documents/Github/Other/carl_rogers_therapy_sessions.pdf'
-            ],
+        transcript_loc='/Users/ansonliu/Documents/Github/Other/carl_rogers_therapy_sessions.pdf',
         run_eda=True
     )
     
