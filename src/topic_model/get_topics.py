@@ -75,7 +75,7 @@ class GetTopics(EDATopics):
             umap_model=self.umap_model,
             hdbscan_model=self.hdbscan_model,
             nr_topics='auto',
-            calculate_probabilities=True  # probabilities needed to visualise
+            calculate_probabilities=True
         )
         
         try:
@@ -189,7 +189,9 @@ class GetTopics(EDATopics):
         """
         self.bert.visualize_topics(custom_labels=self.labelled_topics).show()
         self.bert.visualize_barchart(custom_labels=self.labelled_topics).show()
+        
         self.bert.visualize_heatmap(custom_labels=self.labelled_topics).show()
+        self.bert.visualize_document_datamap(docs=self.formatted_ts, custom_labels=self.labelled_topics).show()
         
     def runner(self) -> None:
         """
