@@ -65,6 +65,7 @@ class TopicLabeller:
             
             default_label = max(similarity_scores, key=similarity_scores.get)
             if similarity_scores[default_label] >= threshold:
+                default_label = ' '.join(default_label.split('_')[1:])
                 logger.success(f'topic_id {topic_id}: default topic label sufficient ({default_label})')
                 labels[topic_id] = default_label
             else:
@@ -83,11 +84,11 @@ class TopicLabeller:
                 for kw_chunk in keywords:
                     if top_similarity < kw_chunk[0][1]:
                         top_label, top_similarity = kw_chunk[0][0], kw_chunk[0][1]
-                        logger.debug(f'NEW top label: {top_label} (similarity score: {top_similarity})')
+                        logger.debug(f'NEW best label: {top_label} (similarity score: {top_similarity})')
                 
                 top_label = self.refine_label(label=top_label, doc=doc, method='textblob')
                 
-                logger.success(f'Using new keyword label for topc id {topic_id}: {top_label}')
+                logger.success(f'Using new keyword label for topic id {topic_id}: {top_label}')
 
                 labels[topic_id] = str(top_label) or 'Uncategorised'
 
@@ -106,7 +107,7 @@ class TopicLabeller:
         :param method: method of refinement
         :return: grammatically correct  and refined label
         """
-        logger.info(f'Refining label: {label}, using {method} method')
+        logger.debug(f'Refining label: {label}, using {method} method')
         
         if method == 'textblob':
             blob = TextBlob(label)
