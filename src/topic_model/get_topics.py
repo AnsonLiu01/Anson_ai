@@ -1,26 +1,23 @@
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
 import re
+import sys
 from typing import List, Tuple
 
 import hdbscan
-from umap import UMAP
-
-import PyPDF2
+import nltk
 import pandas as pd
+import PyPDF2
 import spacy
 from bertopic import BERTopic
-
 from loguru import logger
-import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import PunktSentenceTokenizer, sent_tokenize
+from umap import UMAP
 
-from topic_model.label_topics import TopicLabeller
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from src.topic_model.eda_topics import EDATopics
 from src.utils import load_yaml
+from topic_model.label_topics import TopicLabeller
 
 
 class GetTopics(EDATopics):
