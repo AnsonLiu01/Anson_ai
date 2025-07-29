@@ -42,7 +42,6 @@ class GetTopics(EDATopics):
         
         self.bert = None
         self.filler_words = None
-        self.tokeniser = None
     
     def init_tools(self) -> None:
         """
@@ -53,6 +52,24 @@ class GetTopics(EDATopics):
         config_path = os.path.join(os.path.dirname(__file__), 'config', 'seed_words.yaml')
         seed_words_config = load_yaml(config_path=config_path)
         
+        try:
+            stop_words = set(stopwords.words("english"))
+        except LookupError:
+            logger.info('nltk stop words not found; downloading')
+            nltk.download("stopwords")
+            
+        try:
+            nltk.data.find('tokenizers/punkt')
+        except LookupError:
+            logger.info('nltk punkt tokeniser not found; downloading')
+            nltk.download('punkt')
+
+        try:
+            nltk.data.find('tokenizers/punkt_tab')
+        except LookupError:
+            logger.info('nltk punkt_tab tokeniser not found; downloading')
+            nltk.download('punkt_tab')
+
         self.labeller = TopicLabeller(seed_topics=seed_words_config)
         
         self.umap_model = UMAP(
@@ -79,28 +96,7 @@ class GetTopics(EDATopics):
             nr_topics='auto',
             calculate_probabilities=True
         )
-        
-        try:
-            stop_words = set(stopwords.words("english"))
-        except LookupError:
-            logger.info('nltk stop words not found; downloading')
-            nltk.download("stopwords")
-            stop_words = set(stopwords.words("english"))
-            
-        try:
-            nltk.data.find('tokenizers/punkt')
-        except LookupError:
-            logger.info('nltk punkt tokeniser not found; downloading')
-            nltk.download('punkt')
-
-        try:
-            nltk.data.find('tokenizers/punkt_tab')
-        except LookupError:
-            logger.info('nltk punkt_tab tokeniser not found; downloading')
-            nltk.download('punkt_tab')
-            
-        self.tokeniser = PunktSentenceTokenizer()
-                    
+                                        
     def load_transcripts(self) -> None:
         """
         Function to load transcripts
