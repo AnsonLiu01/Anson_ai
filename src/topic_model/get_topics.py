@@ -83,7 +83,7 @@ class GetTopics(EDATopics):
             min_cluster_size=5,
             metric="euclidean",
             cluster_selection_method="eom",
-            cluster_selection_epsilon=0.5,
+            cluster_selection_epsilon=0.4,
             prediction_data=True
         )
         
@@ -111,7 +111,7 @@ class GetTopics(EDATopics):
                 reader = PyPDF2.PdfReader(file)
                 for page_num in range(
                     4,  # TEMP current pdf transcript starts from 5
-                    len(reader.pages)
+                    18
                     ):
                     text_dict[page_num] = reader.pages[page_num].extract_text()
                 
@@ -185,11 +185,12 @@ class GetTopics(EDATopics):
         """
         Function to process all visualisations
         """
+        self.bert.visualize_document_datamap(docs=self.formatted_ts, custom_labels=self.labelled_topics).show()
+        self.bert.visualize_barchart(custom_labels=self.labelled_topics, top_n_topics=10).show()
+
         self.bert.visualize_topics(custom_labels=self.labelled_topics).show()
-        self.bert.visualize_barchart(custom_labels=self.labelled_topics).show()
         
         self.bert.visualize_heatmap(custom_labels=self.labelled_topics).show()
-        self.bert.visualize_document_datamap(docs=self.formatted_ts, custom_labels=self.labelled_topics).show()
         
     def runner(self) -> None:
         """
