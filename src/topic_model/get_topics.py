@@ -9,6 +9,7 @@ import pandas as pd
 import PyPDF2
 import spacy
 from bertopic import BERTopic
+from bertopic.vectorizers import ClassTfidfTransformer
 from loguru import logger
 from nltk.corpus import stopwords
 from nltk.tokenize import PunktSentenceTokenizer, sent_tokenize
@@ -65,12 +66,16 @@ class GetTopics(EDATopics):
             min_cluster_size=5,
             metric="euclidean",
             cluster_selection_method="eom",
+            cluster_selection_epsilon=0.5,
             prediction_data=True
         )
+        
+        ctfidf_model = ClassTfidfTransformer(reduce_frequent_words=True)
 
         self.bert = BERTopic(
             umap_model=self.umap_model,
             hdbscan_model=self.hdbscan_model,
+            ctfidf_model=ctfidf_model,
             nr_topics='auto',
             calculate_probabilities=True
         )
