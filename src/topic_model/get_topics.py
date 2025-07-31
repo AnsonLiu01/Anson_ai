@@ -109,10 +109,7 @@ class GetTopics(EDATopics):
             text_dict = {}
             with open(self.transcript_loc, 'rb') as file:
                 reader = PyPDF2.PdfReader(file)
-                for page_num in range(
-                    4,  # TEMP current pdf transcript starts from 5
-                    18
-                    ):
+                for page_num in range(0, len(reader.pages)):
                     text_dict[page_num] = reader.pages[page_num].extract_text()
                 
                 self.raw_ts = ''.join(text_dict.values())
