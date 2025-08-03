@@ -12,8 +12,9 @@ from bertopic import BERTopic
 from bertopic.vectorizers import ClassTfidfTransformer
 from loguru import logger
 from nltk.corpus import stopwords
-from nltk.tokenize import PunktSentenceTokenizer, sent_tokenize
+from nltk.tokenize import sent_tokenize
 from umap import UMAP
+from docx import Document
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from src.topic_model.eda_topics import EDATopics
@@ -42,6 +43,9 @@ class GetTopics(EDATopics):
         
         self.bert = None
         self.filler_words = None
+        
+        self.labelled_topics = None
+        self.representative_docs = {}
     
     def init_tools(self) -> None:
         """
@@ -113,6 +117,14 @@ class GetTopics(EDATopics):
                     text_dict[page_num] = reader.pages[page_num].extract_text()
                 
                 self.raw_ts = ''.join(text_dict.values())
+        elif self.transcript_loc.endswith('.docx'):
+            raw_doc = Document(self.transcript_loc)
+            doc = []
+            for paragraph in raw_doc.paragraphs:
+                text = paragraph.text.strip()
+                doc.append(text)
+
+            self.raw_ts = " ".join(line for line in doc)
         else:
             raise NotImplementedError(f'File extension {self.transcript_loc.split(".")[-1]} not supported for parsing')
         
@@ -121,10 +133,14 @@ class GetTopics(EDATopics):
         Function to clean transcripts. Removes spqecial characters, lowers text, remove shorter dialogues and stems words (to their base form)
         """
         logger.info('Cleaning transcript')
-        processed = re.sub(r'\b\w+:\s*', '', self.raw_ts)
-        processed = processed.replace(r'\\+', '')
-        processed = processed.replace('\n', ' ') 
-        processed = re.sub(r'\s+', ' ', processed).strip()
+        
+        processed = (
+            re.sub(r'\b[A-Za-z]\s?\d{1,2}\b', '', self.raw_ts)
+            .replace('\\', '')
+            .translate(str.maketrans('\n\t', '  '))
+            .strip()
+        )
+        processed = re.sub(r'\s{2,}', ' ', processed)
         
         doc = str(self.nlp(processed.lower()))
         
@@ -182,12 +198,33 @@ class GetTopics(EDATopics):
         """
         Function to process all visualisations
         """
+        logger.info('Collecting all visualisations')
+        
         self.bert.visualize_document_datamap(docs=self.formatted_ts, custom_labels=self.labelled_topics).show()
         self.bert.visualize_barchart(custom_labels=self.labelled_topics, top_n_topics=10).show()
 
         self.bert.visualize_topics(custom_labels=self.labelled_topics).show()
         
         self.bert.visualize_heatmap(custom_labels=self.labelled_topics).show()
+        
+    def get_best_representative_docs(self) -> None:
+        """
+        Function to get the best representative docs for each labelled topic
+        """
+        logger.info('Collecting best representated docs for all topics')
+        for n_topic, label in self.labelled_topics.items():
+            if n_topic != -1:
+                self.representative_docs[label] = self.bert.get_representative_docs(n_topic)
+        
+    def get_dashboard_info(self) -> None:
+        """
+        Function to get all data, visualisations and info in preparation for dashboard initialisation
+        """
+        logger.info('Collecting all dashboard info')
+        
+        self.get_best_representative_docs()
+        
+        self.visualisations()
         
     def runner(self) -> None:
         """
@@ -201,5 +238,10 @@ class GetTopics(EDATopics):
         self.extract_topics(cleaned_ts=self.formatted_ts)
         self.label_topics()
         
-        self.visualisations()
-        
+        self.get_dashboard_info()
+                
+        """
+        - epsilon tuning
+        - topics over time use n entries / session length for artificial timestamp
+        - make represntative docs visible per topic
+        """
