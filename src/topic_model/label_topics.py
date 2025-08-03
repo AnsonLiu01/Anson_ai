@@ -11,8 +11,6 @@ from keybert import KeyBERT
 from sentence_transformers import util
 from transformers import pipeline
 from textblob import TextBlob
-from gramformer import Gramformer
-
 
 from src.utils import load_yaml
 
