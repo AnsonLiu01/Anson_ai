@@ -1,5 +1,3 @@
-import os
-
 from loguru import logger
 
 
@@ -28,7 +26,7 @@ class EDATopics:
         return function
 
     @run_eda_check
-    def get_topic_freq(self) -> None:
+    def eda_get_topic_freq(self) -> None:
         """
         Function to get topic frequencies and of which are outliers
         """
@@ -41,10 +39,9 @@ class EDATopics:
         print(f'All topic frequencies:\n{topic_freq[["Topic", "Count"]]}')
     
     @run_eda_check
-    def visual_topic_embeddings(self) -> None:
+    def eda_visual_similarity_heatmap(self) -> None:
         """
-        Function to visualise embedding space
+        Function to visualise topic similarity
         """
-        self.bert.visualize_topics()
-
+        self.bert.visualize_heatmap(custom_labels=self.labelled_topics).show()
         
