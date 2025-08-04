@@ -85,7 +85,7 @@ class GetTopics(EDATopics):
 
         self.hdbscan_model = hdbscan.HDBSCAN(
             min_cluster_size=5,
-            metric="euclidean",
+            metric="cosine",
             cluster_selection_method="eom",
             cluster_selection_epsilon=0.4,
             prediction_data=True
@@ -173,7 +173,7 @@ class GetTopics(EDATopics):
         topics, probs = self.bert.fit_transform(documents=cleaned_ts)
         topic_info = self.bert.get_topic_info()
         
-        self.get_topic_freq()
+        self.eda_get_topic_freq()
 
         self.topics, self.topic_info = topics, topic_info
     
@@ -202,11 +202,9 @@ class GetTopics(EDATopics):
         
         self.bert.visualize_document_datamap(docs=self.formatted_ts, custom_labels=self.labelled_topics).show()
         self.bert.visualize_barchart(custom_labels=self.labelled_topics, top_n_topics=10).show()
-
-        self.bert.visualize_topics(custom_labels=self.labelled_topics).show()
         
-        self.bert.visualize_heatmap(custom_labels=self.labelled_topics).show()
-        
+        self.eda_visual_similarity_heatmap()
+                
     def get_best_representative_docs(self) -> None:
         """
         Function to get the best representative docs for each labelled topic
@@ -241,7 +239,8 @@ class GetTopics(EDATopics):
         self.get_dashboard_info()
                 
         """
-        - epsilon tuning
+        TODO:
+        - epsilon tuning, don't have to pass in maybe? HSBSCAN figures out itself compared to DBSCAN, fact check this
         - topics over time use n entries / session length for artificial timestamp
         - make represntative docs visible per topic
         """
