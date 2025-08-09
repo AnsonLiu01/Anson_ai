@@ -5,21 +5,27 @@ from typing import List, Tuple
 
 import hdbscan
 import nltk
+import numpy as np
 import pandas as pd
 import PyPDF2
 import spacy
 from bertopic import BERTopic
 from bertopic.vectorizers import ClassTfidfTransformer
+from docx import Document
+from kneed import KneeLocator
 from loguru import logger
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize
+from sentence_transformers import SentenceTransformer
+from sklearn.model_selection import ParameterGrid
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import normalize
 from umap import UMAP
-from docx import Document
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from src.topic_model.eda_topics import EDATopics
 from src.utils import load_yaml
-from topic_model.label_topics import TopicLabeller
+from src.topic_model.label_topics import TopicLabeller
 
 
 class GetTopics(EDATopics):
@@ -82,20 +88,12 @@ class GetTopics(EDATopics):
             min_dist=0.1,
             random_state=42
         )
-
-        self.hdbscan_model = hdbscan.HDBSCAN(
-            min_cluster_size=5,
-            metric="cosine",
-            cluster_selection_method="eom",
-            cluster_selection_epsilon=0.4,
-            prediction_data=True
-        )
         
         ctfidf_model = ClassTfidfTransformer(reduce_frequent_words=True)
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
         self.bert = BERTopic(
             umap_model=self.umap_model,
-            hdbscan_model=self.hdbscan_model,
             ctfidf_model=ctfidf_model,
             nr_topics='auto',
             calculate_probabilities=True
@@ -158,6 +156,62 @@ class GetTopics(EDATopics):
             self.formatted_ts = [doc for doc in documents if len(doc.split()) > 3]
         else:
             raise ValueError(f'No formatted words found or recognised in transcript')
+    
+    def tune_hdbscan(self) -> None:
+        """
+        Function to tune hdbscan hyperparameters, finds optimal epsilon via knee detection, uses gridsearch for min_cluster_size
+        """
+        logger.info('Tuning HDBSCAN hyperparameters')
+        
+        embeddings = self.embedding_model.encode(sentences=self.formatted_ts)
+        norm_embeddings = normalize(embeddings, norm='l2')
+
+        norm_embeddings = UMAP(
+            n_components=50,
+            metric='cosine',
+            random_state=42
+        ).fit_transform(norm_embeddings)
+    
+        neighbors = NearestNeighbors(n_neighbors=10).fit(norm_embeddings)
+        distances, _ = neighbors.kneighbors(norm_embeddings)
+        distances = np.sort(distances[:, -1])
+        knee = KneeLocator(range(len(distances)), distances, curve="convex", direction="increasing")
+        optimal_epsilon = distances[knee.knee]
+        
+        param_grid = {
+            "min_cluster_size": [3, 5, 10, 15, 20],  # smaller/larger clusters
+            "cluster_selection_epsilon": [optimal_epsilon, 0.5*optimal_epsilon, 0.3*optimal_epsilon],
+            "min_samples": [1, 3, 5, 10],  # sparser/denser clusters
+        }        
+        
+        best_score = -1
+        best_params = {}
+        for params in ParameterGrid(param_grid):
+            params = {k: float(v) if isinstance(v, (np.floating, float)) else int(v) 
+              if isinstance(v, (np.integer, int)) else v 
+              for k, v in params.items()}
+            
+            clusterer = hdbscan.HDBSCAN(
+                metric="euclidean",
+                cluster_selection_method="eom",
+                **params
+            ).fit(norm_embeddings)
+            
+            norm_embeddings_float64 = np.array(norm_embeddings, dtype=np.float64)
+            score = hdbscan.validity.validity_index(norm_embeddings_float64, clusterer.labels_)
+            
+            if score > best_score:
+                best_score = score
+                best_params = params
+        
+        self.bert.hdbscan_model = hdbscan.HDBSCAN(
+            **best_params,
+            metric="euclidean",
+            cluster_selection_method="eom",
+            prediction_data=True
+        )
+        logger.success(f"Best HDBSCAN params: {best_params} (DBCV: {best_score:.2f})")
+        x = 0
     
     def extract_topics(
         self, 
@@ -232,6 +286,8 @@ class GetTopics(EDATopics):
         
         self.load_transcripts()
         self.clean_transcripts()
+        
+        self.tune_hdbscan()
         
         self.extract_topics(cleaned_ts=self.formatted_ts)
         self.label_topics()
