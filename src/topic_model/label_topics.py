@@ -29,7 +29,7 @@ class TopicLabeller:
         :param seed_topics: Dictionary of seed topics
         """
         self.seed_topics = seed_topics
-        self.sentence_trans = SentenceTransformer("all-MiniLM-L6-v2")
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         
         config_path = os.path.join(os.path.dirname(__file__), 'config', 'seed_words.yaml')
         self.predefined_labels = load_yaml(config_path=config_path)
@@ -53,11 +53,11 @@ class TopicLabeller:
 
         for topic_id, doc in topic_words.items():
             label_id = topic_id + 1 if -1 in topic_words.keys() else topic_id           
-            doc_embedding = self.sentence_trans.encode(" ".join(val for val in doc), convert_to_tensor=True)
+            doc_embedding = self.embedding_model.encode(" ".join(val for val in doc), convert_to_tensor=True)
             similarity_scores = {
                 predefined_labels[label_id]: util.pytorch_cos_sim(
                 doc_embedding,
-                self.sentence_trans.encode(predefined_labels[label_id], convert_to_tensor=True)
+                self.embedding_model.encode(predefined_labels[label_id], convert_to_tensor=True)
             ).item()
             }
             
