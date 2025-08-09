@@ -15,7 +15,7 @@ class EDATopics:
         """
         def function(self, *args, **kwargs):
             if self.run_eda:
-                logger.success(f"⚡EDA enabled, running function {func.__name__}")
+                logger.logger(f"⚡EDA enabled, running function {func.__name__}")
                 print('============= EDA =============\n')
                 result = func(self, *args, **kwargs)
                 print('\n=========== EDA EXIT ==========')
