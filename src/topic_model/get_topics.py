@@ -287,7 +287,7 @@ class GetTopics(EDATopics):
         self.load_transcripts()
         self.clean_transcripts()
         
-        self.tune_hdbscan()
+        # self.tune_hdbscan() # TODO: optuna
         
         self.extract_topics(cleaned_ts=self.formatted_ts)
         self.label_topics()
