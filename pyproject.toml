@@ -1,0 +1,25 @@
+[project]
+name = "anson-ai"
+version = "0.1.0"
+description = "an NLP-focused dashboard"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "bertopic>=0.17.3",
+    "docx>=0.2.4",
+    "hdbscan>=0.8.40",
+    "keybert>=0.9.0",
+    "kneed>=0.8.5",
+    "loguru>=0.7.3",
+    "nltk>=3.9.1",
+    "numpy>=2.0.2",
+    "optuna>=4.5.0",
+    "pandas>=2.3.2",
+    "pypdf2>=3.0.1",
+    "scikit-learn>=1.6.1",
+    "sentence-transformers>=5.1.1",
+    "spacy>=3.8.7",
+    "textblob>=0.19.0",
+    "transformers>=4.56.2",
+    "umap-learn>=0.5.9.post2",
+]
