@@ -83,9 +83,7 @@ class TopicLabeller:
                     if top_similarity < kw_chunk[0][1]:
                         top_label, top_similarity = kw_chunk[0][0], kw_chunk[0][1]
                         logger.debug(f'NEW best label: {top_label} (similarity score: {top_similarity})')
-                
-                top_label = self.refine_label(label=top_label, doc=doc, method='textblob')
-                
+                                
                 logger.success(f'Using new keyword label for topic id {topic_id}: {top_label}')
 
                 labels[topic_id] = str(top_label) or 'Uncategorised'
