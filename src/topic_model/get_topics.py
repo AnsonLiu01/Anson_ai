@@ -211,7 +211,6 @@ class GetTopics(EDATopics):
             prediction_data=True
         )
         logger.success(f"Best HDBSCAN params: {best_params} (DBCV: {best_score:.2f})")
-        x = 0
     
     def extract_topics(
         self, 
@@ -287,7 +286,7 @@ class GetTopics(EDATopics):
         self.load_transcripts()
         self.clean_transcripts()
         
-        # self.tune_hdbscan() # TODO: optuna
+        self.tune_hdbscan()
         
         self.extract_topics(cleaned_ts=self.formatted_ts)
         self.label_topics()
