@@ -47,6 +47,7 @@ networkx==3.4.2
 nltk==3.9.1
 numba==0.61.0
 numpy==1.26.4
+optuna==4.5.0
 packaging==24.2
 pandas==2.2.3
 pillow==11.1.0
