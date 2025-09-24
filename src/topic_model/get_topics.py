@@ -21,11 +21,15 @@ from sklearn.model_selection import ParameterGrid
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import normalize
 from umap import UMAP
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from src.topic_model.eda_topics import EDATopics
 from src.utils import load_yaml
 from src.topic_model.label_topics import TopicLabeller
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 class GetTopics(EDATopics):
@@ -159,11 +163,17 @@ class GetTopics(EDATopics):
     
     def tune_hdbscan(self) -> None:
         """
-        Function to tune hdbscan hyperparameters, finds optimal epsilon via knee detection, uses gridsearch for min_cluster_size
+        Function to tune HDBSCAN hyperparameters.
+        - Finds optimal epsilon via knee detection
+        - Performs grid search across parameters
+        - Plots DBCV scores across parameter sets
         """
         logger.info('Tuning HDBSCAN hyperparameters')
-        
-        embeddings = self.embedding_model.encode(sentences=self.formatted_ts)
+
+        embeddings = self.embedding_model.encode(
+            sentences=self.formatted_ts,
+            show_progress_bar=True
+        )
         norm_embeddings = normalize(embeddings, norm='l2')
 
         norm_embeddings = UMAP(
@@ -171,39 +181,60 @@ class GetTopics(EDATopics):
             metric='cosine',
             random_state=42
         ).fit_transform(norm_embeddings)
-    
+
+        # Estimate epsilon using k-NN distance + knee detection
         neighbors = NearestNeighbors(n_neighbors=10).fit(norm_embeddings)
         distances, _ = neighbors.kneighbors(norm_embeddings)
         distances = np.sort(distances[:, -1])
         knee = KneeLocator(range(len(distances)), distances, curve="convex", direction="increasing")
         optimal_epsilon = distances[knee.knee]
-        
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(len(distances)), distances, label="k-distance curve")
+        if knee.knee is not None:
+            plt.axvline(knee.knee, color="red", linestyle="--", label=f"Knee at {knee.knee}")
+        plt.title("Knee Detection for Optimal Epsilon")
+        plt.xlabel("Points sorted by distance")
+        plt.ylabel("Distance to 10th nearest neighbor")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
         param_grid = {
-            "min_cluster_size": [3, 5, 10, 15, 20],  # smaller/larger clusters
-            "cluster_selection_epsilon": [optimal_epsilon, 0.5*optimal_epsilon, 0.3*optimal_epsilon],
-            "min_samples": [1, 3, 5, 10],  # sparser/denser clusters
-        }        
-        
+            "min_cluster_size": [3, 5, 10, 15, 20],
+            "cluster_selection_epsilon": [optimal_epsilon, 0.9 * optimal_epsilon, 1.1 * optimal_epsilon],
+            "min_samples": [1, 3, 5, 10],
+        }
+
         best_score = -1
         best_params = {}
-        for params in ParameterGrid(param_grid):
-            params = {k: float(v) if isinstance(v, (np.floating, float)) else int(v) 
-              if isinstance(v, (np.integer, int)) else v 
-              for k, v in params.items()}
-            
+        scores = []
+        params_list = []
+
+        # Grid search
+        logger.info('HDBSCAN Parameter Grid Search')
+        for params in tqdm(ParameterGrid(param_grid)):
+            params = {k: float(v) if isinstance(v, (np.floating, float)) else int(v)
+                    if isinstance(v, (np.integer, int)) else v
+                    for k, v in params.items()}
+
             clusterer = hdbscan.HDBSCAN(
                 metric="euclidean",
                 cluster_selection_method="eom",
                 **params
             ).fit(norm_embeddings)
-            
+
             norm_embeddings_float64 = np.array(norm_embeddings, dtype=np.float64)
             score = hdbscan.validity.validity_index(norm_embeddings_float64, clusterer.labels_)
-            
+
+            scores.append(score)
+            params_list.append(params)
+
             if score > best_score:
                 best_score = score
                 best_params = params
-        
+
+        # Fit final model
         self.bert.hdbscan_model = hdbscan.HDBSCAN(
             **best_params,
             metric="euclidean",
@@ -211,6 +242,21 @@ class GetTopics(EDATopics):
             prediction_data=True
         )
         logger.success(f"Best HDBSCAN params: {best_params} (DBCV: {best_score:.2f})")
+
+        # Plot scores
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(len(scores)), scores, marker="o")
+        plt.title("DBCV Scores across HDBSCAN parameter sets")
+        plt.xlabel("Parameter Set Index")
+        plt.ylabel("DBCV Score")
+        plt.grid(True)
+
+        # Annotate best point
+        best_idx = int(np.argmax(scores))
+        plt.scatter(best_idx, scores[best_idx], color="red", s=100,
+                    label=f"Best: {scores[best_idx]:.2f}")
+        plt.legend()
+        plt.show()
     
     def extract_topics(
         self, 
