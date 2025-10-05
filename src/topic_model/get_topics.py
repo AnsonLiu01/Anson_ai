@@ -39,10 +39,12 @@ class GetTopics(EDATopics):
     def __init__(
         self, 
         transcript_loc: str,
-        run_eda: bool
+        run_eda: bool,
+        hp_tune: bool
     ):
         self.transcript_loc = transcript_loc
         self.run_eda = run_eda
+        self.hp_tune = hp_tune
         
         self.nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
         
@@ -332,7 +334,8 @@ class GetTopics(EDATopics):
         self.load_transcripts()
         self.clean_transcripts()
         
-        self.tune_hdbscan()
+        if self.hp_tune:
+            self.tune_hdbscan()
         
         self.extract_topics(cleaned_ts=self.formatted_ts)
         self.label_topics()
