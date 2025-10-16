@@ -21,6 +21,7 @@ class EDATopics:
                 print('\n=========== EDA EXIT ==========')
             else:
                 logger.debug(f'EDA disabled, not running function {func.__name__}')
+                result = None
             
             return result
         return function
