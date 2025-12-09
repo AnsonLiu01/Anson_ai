@@ -21,8 +21,10 @@ from sklearn.model_selection import ParameterGrid
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import normalize
 from umap import UMAP
+import matplotlib
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import mplcursors
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from src.topic_model.eda_topics import EDATopics
@@ -301,11 +303,63 @@ class GetTopics(EDATopics):
         """
         logger.info('Collecting all visualisations')
         
-        self.bert.visualize_document_datamap(docs=self.formatted_ts, custom_labels=self.labelled_topics).show()
+        self.get_datamap_vis()
+
         self.bert.visualize_barchart(custom_labels=self.labelled_topics, top_n_topics=10).show()
         
         self.eda_visual_similarity_heatmap()
                 
+    def get_datamap_vis(self) -> None:
+        """
+        Function to get data map visualisation
+        """
+        fig = self.bert.visualize_document_datamap(
+            docs=self.formatted_ts,
+            custom_labels=self.labelled_topics
+        )
+        
+        hover_texts = [f"index {i}\ndoc preview: {str(doc)[:120]}" for i, doc in enumerate(self.formatted_ts)]
+        
+        ax = fig.axes[0] if getattr(fig, "axes", None) else fig.add_subplot(111)  # pick axes (use first axis if multiple)
+
+        # find scatter collections (PathCollection)
+        collections = [c for c in ax.get_children()
+                    if isinstance(c, matplotlib.collections.PathCollection)]
+
+        if not collections:
+            # fallback: maybe points are Line2D with marker only
+            lines = [ln for ln in ax.get_children() if isinstance(ln, matplotlib.lines.Line2D) and ln.get_marker() != 'None']
+        else:
+            lines = []
+
+        idx = 0
+        for coll in collections:
+            offsets = coll.get_offsets()
+            n = len(offsets)
+            label_slice = hover_texts[idx: idx + n]
+            idx += n
+
+            cursor = mplcursors.cursor(coll, hover=True)
+
+            # bind label_slice with default arg to avoid late binding capture
+            @cursor.connect("add")
+            def _(sel, label_slice=label_slice):
+                sel.annotation.set_text(label_slice[sel.index])
+
+        for ln in lines:
+            x, y = ln.get_xdata(), ln.get_ydata()
+            n = len(x)
+            label_slice = hover_texts[idx: idx + n]
+            idx += n
+
+            cursor = mplcursors.cursor(ln, hover=True)
+
+            @cursor.connect("add")
+            def _(sel, label_slice=label_slice):
+                sel.annotation.set_text(label_slice[sel.index])
+
+        plt.show()
+        
     def get_best_representative_docs(self) -> None:
         """
         Function to get the best representative docs for each labelled topic
