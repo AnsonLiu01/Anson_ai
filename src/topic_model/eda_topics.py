@@ -1,4 +1,5 @@
 from loguru import logger
+from matplotlib.figure import Figure
 
 
 class EDATopics:
@@ -15,7 +16,7 @@ class EDATopics:
         """
         def function(self, *args, **kwargs):
             if self.run_eda:
-                logger.info(f"⚡EDA enabled, running function {func.__name__}")
+                logger.info(f"EDA enabled, running function {func.__name__}")
                 print('============= EDA =============\n')
                 result = func(self, *args, **kwargs)
                 print('\n=========== EDA EXIT ==========')
@@ -40,9 +41,9 @@ class EDATopics:
         print(f'All topic frequencies:\n{topic_freq[["Topic", "Count"]]}')
     
     @run_eda_check
-    def eda_visual_similarity_heatmap(self) -> None:
+    def eda_visual_similarity_heatmap(self) -> Figure:
         """
         Function to visualise topic similarity
         """
-        self.bert.visualize_heatmap(custom_labels=self.labelled_topics).show()
+        return self.bert.visualize_heatmap(custom_labels=self.labelled_topics)
         

@@ -3,28 +3,27 @@ import re
 import sys
 from typing import List, Tuple
 
+import PyPDF2
 import hdbscan
+import matplotlib.pyplot as plt
 import nltk
 import numpy as np
 import pandas as pd
-import PyPDF2
 import spacy
 from bertopic import BERTopic
 from bertopic.vectorizers import ClassTfidfTransformer
 from docx import Document
 from kneed import KneeLocator
 from loguru import logger
+from matplotlib.figure import Figure
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize
 from sentence_transformers import SentenceTransformer
 from sklearn.model_selection import ParameterGrid
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import normalize
-from umap import UMAP
-import matplotlib
-import matplotlib.pyplot as plt
 from tqdm import tqdm
-import mplcursors
+from umap import UMAP
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from src.topic_model.eda_topics import EDATopics
@@ -42,12 +41,14 @@ class GetTopics(EDATopics):
         self, 
         transcript_loc: str,
         run_eda: bool,
-        hp_tune: bool
+        hp_tune: bool,
+        show_local_visualisations: bool
     ):
         self.transcript_loc = transcript_loc
         self.run_eda = run_eda
         self.hp_tune = hp_tune
-        
+        self.show_local_visualisations = show_local_visualisations
+
         self.nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
         
         self.raw_ts = None
@@ -217,7 +218,7 @@ class GetTopics(EDATopics):
 
         # Grid search
         logger.info('HDBSCAN Parameter Grid Search')
-        for params in tqdm(ParameterGrid(param_grid)):
+        for params in tqdm(ParameterGrid(param_grid), leave=False):
             params = {k: float(v) if isinstance(v, (np.floating, float)) else int(v)
                     if isinstance(v, (np.integer, int)) else v
                     for k, v in params.items()}
@@ -302,64 +303,88 @@ class GetTopics(EDATopics):
         Function to process all visualisations
         """
         logger.info('Collecting all visualisations')
-        
-        self.get_datamap_vis()
 
-        self.bert.visualize_barchart(custom_labels=self.labelled_topics, top_n_topics=10).show()
-        
-        self.eda_visual_similarity_heatmap()
-                
-    def get_datamap_vis(self) -> None:
+        datamap_fig = self.get_datamap_vis()
+
+        barchart_fig = self.bert.visualize_barchart(
+            custom_labels=self.labelled_topics,
+            top_n_topics=10
+        )
+
+        heatmap_fig = self.eda_visual_similarity_heatmap()
+
+        if self.show_local_visualisations:
+            if datamap_fig:
+                plt.show()
+            if barchart_fig:
+                barchart_fig.show()
+            if heatmap_fig:
+                heatmap_fig.show()
+
+    def get_datamap_vis(self) -> Figure:
         """
         Function to get data map visualisation
         """
-        fig = self.bert.visualize_document_datamap(
+        fig = self.bert.visualize_documents(
             docs=self.formatted_ts,
-            custom_labels=self.labelled_topics
+            custom_labels=self.labelled_topics,
+            hide_document_hover=False
         )
-        
-        hover_texts = [f"index {i}\ndoc preview: {str(doc)[:120]}" for i, doc in enumerate(self.formatted_ts)]
-        
-        ax = fig.axes[0] if getattr(fig, "axes", None) else fig.add_subplot(111)  # pick axes (use first axis if multiple)
 
-        # find scatter collections (PathCollection)
-        collections = [c for c in ax.get_children()
-                    if isinstance(c, matplotlib.collections.PathCollection)]
+        fig.update_traces(
+            mode="markers",
+            marker=dict(
+                size=8,
+                opacity=0.7
+            )
+        )
+        # fig = self.bert.visualize_document_datamap(
+        #     docs=self.formatted_ts,
+        #     custom_labels=self.labelled_topics
+        # )
+        #
+        # hover_texts = [f"index {i}\ndoc preview: {str(doc)[:120]}" for i, doc in enumerate(self.formatted_ts)]
+        #
+        # ax = fig.axes[0] if getattr(fig, "axes", None) else fig.add_subplot(111)  # pick axes (use first axis if multiple)
+        #
+        # # find scatter collections (PathCollection)
+        # collections = [c for c in ax.get_children()
+        #             if isinstance(c, matplotlib.collections.PathCollection)]
+        #
+        # if not collections:
+        #     # fallback: maybe points are Line2D with marker only
+        #     lines = [ln for ln in ax.get_children() if isinstance(ln, matplotlib.lines.Line2D) and ln.get_marker() != 'None']
+        # else:
+        #     lines = []
+        #
+        # idx = 0
+        # for coll in collections:
+        #     offsets = coll.get_offsets()
+        #     n = len(offsets)
+        #     label_slice = hover_texts[idx: idx + n]
+        #     idx += n
+        #
+        #     cursor = mplcursors.cursor(coll, hover=True)
+        #
+        #     # bind label_slice with default arg to avoid late binding capture
+        #     @cursor.connect("add")
+        #     def _(sel, label_slice=label_slice):
+        #         sel.annotation.set_text(label_slice[sel.index])
+        #
+        # for ln in lines:
+        #     x, y = ln.get_xdata(), ln.get_ydata()
+        #     n = len(x)
+        #     label_slice = hover_texts[idx: idx + n]
+        #     idx += n
+        #
+        #     cursor = mplcursors.cursor(ln, hover=True)
+        #
+        #     @cursor.connect("add")
+        #     def _(sel, label_slice=label_slice):
+        #         sel.annotation.set_text(label_slice[sel.index])
 
-        if not collections:
-            # fallback: maybe points are Line2D with marker only
-            lines = [ln for ln in ax.get_children() if isinstance(ln, matplotlib.lines.Line2D) and ln.get_marker() != 'None']
-        else:
-            lines = []
+        return fig
 
-        idx = 0
-        for coll in collections:
-            offsets = coll.get_offsets()
-            n = len(offsets)
-            label_slice = hover_texts[idx: idx + n]
-            idx += n
-
-            cursor = mplcursors.cursor(coll, hover=True)
-
-            # bind label_slice with default arg to avoid late binding capture
-            @cursor.connect("add")
-            def _(sel, label_slice=label_slice):
-                sel.annotation.set_text(label_slice[sel.index])
-
-        for ln in lines:
-            x, y = ln.get_xdata(), ln.get_ydata()
-            n = len(x)
-            label_slice = hover_texts[idx: idx + n]
-            idx += n
-
-            cursor = mplcursors.cursor(ln, hover=True)
-
-            @cursor.connect("add")
-            def _(sel, label_slice=label_slice):
-                sel.annotation.set_text(label_slice[sel.index])
-
-        plt.show()
-        
     def get_best_representative_docs(self) -> None:
         """
         Function to get the best representative docs for each labelled topic
