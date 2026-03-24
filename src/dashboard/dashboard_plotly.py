@@ -1,7 +1,9 @@
+import traceback
+
 import dash
-from dash import dcc, html, Input, Output
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
+from dash import dcc, html, Input, Output
 from loguru import logger
 
 
@@ -132,7 +134,6 @@ class MainDashboard:
 
             except Exception as e:
                 logger.error(f"Error generating data map: {e}")
-                import traceback
                 traceback.print_exc()
 
                 # Return error figure
@@ -187,7 +188,6 @@ class MainDashboard:
 
             except Exception as e:
                 logger.error(f"Error generating topics: {e}")
-                import traceback
                 traceback.print_exc()
 
                 # Return error figure
@@ -236,7 +236,6 @@ class MainDashboard:
 
             except Exception as e:
                 logger.error(f"Error generating similarity heatmap: {e}")
-                import traceback
                 traceback.print_exc()
 
                 # Return error figure
